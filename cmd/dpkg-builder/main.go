@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/urfave/cli"
@@ -18,8 +19,6 @@ import (
 // .deb using the source files from debian-testing.
 
 const debianTestingBaseURL string = "https://packages.debian.org/buster/"
-
-var pkgName string
 
 func main() {
 	app := cli.NewApp()
@@ -86,7 +85,7 @@ func commandFetch(c *cli.Context) error {
 		if !linkURL.IsAbs() {
 			linkURL = baseURL.ResolveReference(linkURL)
 		}
-		download(linkURL)
+		download(linkURL, pkgName)
 	}
 	return nil
 }
@@ -144,7 +143,41 @@ func filterLinks(links []string) (filteredLinks []string) {
 	return
 }
 
-func download(u *url.URL) {
-	log.Printf("Downloading %s...", u)
+func download(u *url.URL, pkgName string) {
+	path, dir := buildPath(u, pkgName)
+	log.Printf("Downloading %s to %s...", u, path)
+	ensureDirExists(dir)
+
+	file, err := os.Create(path)
+	if err != nil {
+		log.Fatalf("Error creating file %s: %s", path, err)
+	}
+	defer file.Close()
+
+	resp, err := http.Get(u.String())
+	if err != nil {
+		log.Fatalf("Error downloading file %s: %s", u, err)
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		log.Fatalf("Error downloading file %s to %s: %s", u, path, err)
+	}
+}
+
+func buildPath(u *url.URL, pkg string) (path string, parentDir string) {
+	i := strings.LastIndex(u.Path, "/")
+	parentDir = filepath.FromSlash(pkg)
+	path = filepath.Join(parentDir, filepath.FromSlash(u.Path[i+1:]))
 	return
+}
+
+func ensureDirExists(dir string) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err := os.Mkdir(dir, 0755)
+		if err != nil {
+			log.Fatalf("Error creating directory %s: %s", dir, err)
+		}
+	}
 }
