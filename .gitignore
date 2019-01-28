@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+cmd/dpkg-builder/dpkg-builder
 
 # Test binary, build with `go test -c`
 *.test
