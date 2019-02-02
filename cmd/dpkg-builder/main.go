@@ -147,6 +147,10 @@ func download(u *url.URL, pkgName string) {
 	path, dir := buildPath(u, pkgName)
 	log.Printf("Downloading %s to %s...", u, path)
 	ensureDirExists(dir)
+	if fileExists(path) {
+		log.Printf("File already exists, skipping.")
+		return
+	}
 
 	file, err := os.Create(path)
 	if err != nil {
@@ -180,4 +184,9 @@ func ensureDirExists(dir string) {
 			log.Fatalf("Error creating directory %s: %s", dir, err)
 		}
 	}
+}
+
+func fileExists(file string) bool {
+	_, err := os.Stat(file)
+	return err == nil
 }
