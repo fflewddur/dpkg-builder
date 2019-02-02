@@ -20,6 +20,42 @@ import (
 
 const debianTestingBaseURL string = "https://packages.debian.org/buster/"
 
+type dpkgSrc struct {
+	Name    string
+	DSC     string
+	Orig    string
+	Debian  string
+	BaseURL *url.URL
+}
+
+func (d *dpkgSrc) fillFromLinks(links []string) {
+	for _, l := range links {
+		switch {
+		case strings.HasSuffix(l, ".dsc"):
+			d.DSC = l
+		case strings.HasSuffix(l, ".orig.tar.xz") || strings.HasSuffix(l, ".orig.tar.gz"):
+			d.Orig = l
+		case strings.HasSuffix(l, ".debian.tar.xz"):
+			d.Debian = l
+		}
+	}
+}
+
+func (d *dpkgSrc) fetch() {
+	// links = filterLinks(links)
+	links := []string{d.DSC, d.Debian, d.Orig}
+	for _, l := range links {
+		linkURL, err := url.Parse(l)
+		if err != nil {
+			log.Fatalf("Error parsing URL %s: %s", l, err)
+		}
+		if !linkURL.IsAbs() {
+			linkURL = d.BaseURL.ResolveReference(linkURL)
+		}
+		download(linkURL, d.Name)
+	}
+}
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "dpkg-builder"
@@ -75,18 +111,13 @@ func commandFetch(c *cli.Context) error {
 	}
 	defer resp.Body.Close()
 
+	dp := new(dpkgSrc)
 	links := getLinks(resp.Body)
-	links = filterLinks(links)
-	for _, l := range links {
-		linkURL, err := url.Parse(l)
-		if err != nil {
-			log.Fatalf("Error parsing URL %s: %s", l, err)
-		}
-		if !linkURL.IsAbs() {
-			linkURL = baseURL.ResolveReference(linkURL)
-		}
-		download(linkURL, pkgName)
-	}
+	dp.fillFromLinks(links)
+	dp.Name = pkgName
+	dp.BaseURL = baseURL
+	dp.fetch()
+
 	return nil
 }
 
@@ -124,20 +155,6 @@ func getHref(t html.Token) (href string, ok bool) {
 			href = a.Val
 			ok = true
 			break
-		}
-	}
-	return
-}
-
-func filterLinks(links []string) (filteredLinks []string) {
-	for _, l := range links {
-		switch {
-		case strings.HasSuffix(l, ".dsc"):
-			filteredLinks = append(filteredLinks, l)
-		case strings.HasSuffix(l, ".orig.tar.xz") || strings.HasSuffix(l, ".orig.tar.gz"):
-			filteredLinks = append(filteredLinks, l)
-		case strings.HasSuffix(l, ".debian.tar.xz"):
-			filteredLinks = append(filteredLinks, l)
 		}
 	}
 	return
@@ -189,4 +206,8 @@ func ensureDirExists(dir string) {
 func fileExists(file string) bool {
 	_, err := os.Stat(file)
 	return err == nil
+}
+
+func extract(dscPath string) {
+	log.Printf("Extracting %s", dscPath)
 }
