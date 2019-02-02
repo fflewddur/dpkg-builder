@@ -134,7 +134,7 @@ func filterLinks(links []string) (filteredLinks []string) {
 		switch {
 		case strings.HasSuffix(l, ".dsc"):
 			filteredLinks = append(filteredLinks, l)
-		case strings.HasSuffix(l, ".orig.tar.xz"):
+		case strings.HasSuffix(l, ".orig.tar.xz") || strings.HasSuffix(l, ".orig.tar.gz"):
 			filteredLinks = append(filteredLinks, l)
 		case strings.HasSuffix(l, ".debian.tar.xz"):
 			filteredLinks = append(filteredLinks, l)
