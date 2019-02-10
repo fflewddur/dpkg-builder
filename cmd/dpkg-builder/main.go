@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -26,6 +28,7 @@ type dpkgSrc struct {
 	Orig    string
 	Debian  string
 	BaseURL *url.URL
+	DscPath string
 }
 
 func (d *dpkgSrc) fillFromLinks(links []string) {
@@ -42,7 +45,6 @@ func (d *dpkgSrc) fillFromLinks(links []string) {
 }
 
 func (d *dpkgSrc) fetch() {
-	// links = filterLinks(links)
 	links := []string{d.DSC, d.Debian, d.Orig}
 	for _, l := range links {
 		linkURL, err := url.Parse(l)
@@ -52,7 +54,39 @@ func (d *dpkgSrc) fetch() {
 		if !linkURL.IsAbs() {
 			linkURL = d.BaseURL.ResolveReference(linkURL)
 		}
-		download(linkURL, d.Name)
+		path := download(linkURL, d.Name)
+		switch {
+		case l == d.DSC:
+			d.DscPath = path
+		}
+	}
+}
+
+func (d *dpkgSrc) extract() {
+	_, dscFile := filepath.Split(d.DscPath)
+	cmd := exec.Command("dpkg-source", "-x", "--no-check", dscFile)
+	cmd.Dir = filepath.FromSlash(d.Name)
+
+	cmdReader, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Error creating StdoutPipe: %s", err)
+	}
+
+	scanner := bufio.NewScanner(cmdReader)
+	go func() {
+		for scanner.Scan() {
+			log.Println(scanner.Text())
+		}
+	}()
+
+	err = cmd.Start()
+	if err != nil {
+		log.Fatalf("Error starting Cmd: %s", err)
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		log.Fatalf("Error waiting for Cmd: %s", err)
 	}
 }
 
@@ -117,6 +151,7 @@ func commandFetch(c *cli.Context) error {
 	dp.Name = pkgName
 	dp.BaseURL = baseURL
 	dp.fetch()
+	dp.extract()
 
 	return nil
 }
@@ -160,7 +195,7 @@ func getHref(t html.Token) (href string, ok bool) {
 	return
 }
 
-func download(u *url.URL, pkgName string) {
+func download(u *url.URL, pkgName string) (path string) {
 	path, dir := buildPath(u, pkgName)
 	log.Printf("Downloading %s to %s...", u, path)
 	ensureDirExists(dir)
@@ -185,6 +220,8 @@ func download(u *url.URL, pkgName string) {
 	if err != nil {
 		log.Fatalf("Error downloading file %s to %s: %s", u, path, err)
 	}
+
+	return
 }
 
 func buildPath(u *url.URL, pkg string) (path string, parentDir string) {
@@ -206,8 +243,4 @@ func ensureDirExists(dir string) {
 func fileExists(file string) bool {
 	_, err := os.Stat(file)
 	return err == nil
-}
-
-func extract(dscPath string) {
-	log.Printf("Extracting %s", dscPath)
 }
