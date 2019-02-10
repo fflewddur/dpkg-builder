@@ -122,6 +122,9 @@ func commandBuild(c *cli.Context) error {
 	}
 	log.Print("Building " + pkgName)
 
+	dp := fetch(pkgName)
+	build(dp)
+
 	return nil
 }
 
@@ -132,6 +135,12 @@ func commandFetch(c *cli.Context) error {
 	}
 	log.Print("Fetching " + pkgName)
 
+	fetch(pkgName)
+
+	return nil
+}
+
+func fetch(pkgName string) (dp *dpkgSrc) {
 	baseURL, err := url.Parse(debianTestingBaseURL)
 	if err != nil {
 		log.Fatalf("Error parsing base URL: %s", err)
@@ -145,7 +154,7 @@ func commandFetch(c *cli.Context) error {
 	}
 	defer resp.Body.Close()
 
-	dp := new(dpkgSrc)
+	dp = new(dpkgSrc)
 	links := getLinks(resp.Body)
 	dp.fillFromLinks(links)
 	dp.Name = pkgName
@@ -153,7 +162,11 @@ func commandFetch(c *cli.Context) error {
 	dp.fetch()
 	dp.extract()
 
-	return nil
+	return
+}
+
+func build(dp *dpkgSrc) {
+
 }
 
 func validateArgs(c *cli.Context) (name string, ok bool) {
